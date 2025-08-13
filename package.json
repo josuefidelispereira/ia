@@ -2,6 +2,7 @@
   "name": "ia-chat-cloudflare",
   "version": "2.0.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@clerk/backend": "^1.2.3",
     "itty-router": "^4.0.23"
