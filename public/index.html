@@ -8,39 +8,60 @@
     <link rel="icon" href="https://seeklogo.com/images/D/deepseek-logo-661F232050-seeklogo.com.png" type="image/png">
 </head>
 <body>
-    <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h2>Configurações</h2>
-            <div class="setting-item">
-                <label for="model-select">Modo</label>
-                <select id="model-select">
-                    <option value="deepseek-chat">Modo Geral</option>
-                    <option value="deepseek-coder">Modo Programador</option>
-                </select>
+    <div id="app-container">
+        <div id="sign-in-container" class="auth-container">
+            <h1>Bem-vindo ao Chat IA</h1>
+            <p>Faça login ou crie uma conta para continuar</p>
+            <div id="clerk-sign-in"></div>
+        </div>
+
+        <div id="app-content" style="display: none;">
+             <div class="app-layout">
+                <aside class="sidebar" id="sidebar">
+                    <div class="sidebar-header">
+                        <button id="new-chat-btn" class="sidebar-button">
+                             <span>Novo Chat</span>
+                        </button>
+                    </div>
+                    <div class="sidebar-content">
+                        <div class="search-box">
+                            <input type="text" id="search-input" placeholder="Buscar em chats...">
+                        </div>
+                        <nav id="chat-history" class="chat-history"></nav>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div id="clerk-user-button"></div>
+                    </div>
+                </aside>
+                <main class="main-content">
+                    <header class="main-header">
+                        <button id="menu-toggle-btn" class="menu-toggle-btn">
+                           </button>
+                        <h1 class="mobile-title">Chat IA</h1>
+                    </header>
+                    <div id="chat-container" class="chat-container">
+                        <div id="welcome-view" class="welcome-view">
+                            <h1>Por onde começamos?</h1>
+                        </div>
+                        <div id="chat-window" class="chat-window"></div>
+                    </div>
+                    <footer class="chat-input-area">
+                        <div class="input-wrapper">
+                             <form id="message-form" class="message-form">
+                                <textarea id="message-input" placeholder="Pergunte alguma coisa..." rows="1"></textarea>
+                                <button type="submit" id="send-button" title="Enviar Mensagem">
+                                    </button>
+                            </form>
+                        </div>
+                        <p class="footer-note">Uma IA para fins de demonstração.</p>
+                    </footer>
+                </main>
+                <div class="sidebar-overlay" id="sidebar-overlay"></div>
             </div>
-            <div class="setting-item">
-                <label for="temp-slider">Criatividade (Temperatura): <span id="temp-value">1.0</span></label>
-                <input type="range" id="temp-slider" min="0" max="2" step="0.1" value="1.0">
-            </div>
-            <div class="setting-item">
-                <label for="system-prompt">Instrução do Sistema</label>
-                <textarea id="system-prompt" rows="4" placeholder="Ex: Você é um assistente de marketing especializado em redes sociais."></textarea>
-            </div>
-            <button id="close-modal-btn">Fechar</button>
         </div>
     </div>
-
-    <div class="app-layout">
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-footer">
-                <button id="settings-btn" class="sidebar-action-btn" title="Configurações">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                </button>
-                 <button id="theme-toggle-btn" class="sidebar-action-btn" title="Alternar Tema">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                </button>
-            </div>
-        </aside>
-        </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script id="clerk-script"></script> <script src="/script.js"></script>
 </body>
 </html>
