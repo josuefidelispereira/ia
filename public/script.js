@@ -81,8 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (role === 'user') {
             contentDiv.textContent = content;
         } else {
-            // Se for IA, apenas preparamos o container. O conteúdo virá via streaming.
-            contentDiv.innerHTML = content; // Para carregar histórico com HTML já formatado
+            contentDiv.innerHTML = content;
         }
         
         wrapper.appendChild(roleDiv);
@@ -112,6 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         conversations[currentChatId].messages.push({ role: 'user', content: userMessage });
         addMessageToUI('user', userMessage);
+        
+        // ***** MUDANÇA PRINCIPAL DESTA VERSÃO *****
+        // Rola para a mensagem do usuário imediatamente
+        scrollToBottom(); 
         
         messageInput.value = '';
         messageInput.style.height = 'auto';
@@ -157,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 aiMessageContent.innerHTML = marked.parse(aiResponseText);
                                 aiMessageContent.appendChild(cursor);
-                                scrollToBottom(); // ROLA A PÁGINA A CADA PEDAÇO
+                                scrollToBottom();
                             }
                         } catch (e) {}
                     }
@@ -216,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatWindow.style.display = 'none';
         messageInput.value = '';
         renderChatHistory();
-        sidebar.classList.remove('visible'); // Esconde sidebar no mobile
+        sidebar.classList.remove('visible');
     };
     
     const loadChat = (chatId) => {
@@ -235,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         renderChatHistory();
-        sidebar.classList.remove('visible'); // Esconde sidebar no mobile
+        sidebar.classList.remove('visible');
     };
 
     // --- EVENT LISTENERS ---
@@ -255,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
             loadChat(e.target.dataset.chatId);
         }
     });
-    // Lógica para o menu mobile
     menuToggleBtn.addEventListener('click', () => sidebar.classList.toggle('visible'));
 
     // --- INICIALIZAÇÃO ---
