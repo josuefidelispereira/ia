@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FUNÇÕES DE CHAT E MENSAGENS ---
 
-    // Adiciona uma mensagem (usuário ou IA) à janela de chat
+    // Adiciona um container de mensagem (usuário ou IA) à janela de chat
     const addMessageToUI = (role, content) => {
         const wrapper = document.createElement('div');
         wrapper.classList.add('message-wrapper', role);
@@ -27,7 +27,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
-        contentDiv.textContent = content; // Para o usuário, o conteúdo é simples
+        
+        // Mensagem do usuário não precisa de parsing de markdown
+        if (role === 'user') {
+            contentDiv.textContent = content;
+        }
         
         wrapper.appendChild(roleDiv);
         wrapper.appendChild(contentDiv);
@@ -78,7 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ messages: conversations[currentChatId].messages })
             });
             
-            if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+            if (!response.ok) {
+                 const errorData = await response.json();
+                 throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -100,8 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (parsedData.choices && parsedData.choices[0].delta.content) {
                                 const textChunk = parsedData.choices[0].delta.content;
                                 aiResponseText += textChunk;
-                                // Atualiza o conteúdo, mantendo o cursor no final
-                                aiMessageContent.textContent = aiResponseText;
+                                
+                                // Traduz o markdown para HTML e insere na página
+                                aiMessageContent.innerHTML = marked.parse(aiResponseText);
                                 aiMessageContent.appendChild(cursor);
                             }
                         } catch (e) {
@@ -113,7 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Finaliza a resposta
             cursor.remove(); // Remove o cursor
-            aiMessageContent.textContent = aiResponseText; // Garante o conteúdo final
+            // Garante que o conteúdo final seja parseado
+            aiMessageContent.innerHTML = marked.parse(aiResponseText); 
+            
             conversations[currentChatId].messages.push({ role: 'assistant', content: aiResponseText });
             saveConversations();
             renderChatHistory();
@@ -186,7 +196,13 @@ document.addEventListener('DOMContentLoaded', () => {
         chatWindow.style.display = 'block';
 
         conversations[chatId].messages.forEach(msg => {
-            addMessageToUI(msg.role, msg.content);
+            const contentDiv = addMessageToUI(msg.role, '');
+             if (msg.role === 'user') {
+                contentDiv.textContent = msg.content;
+            } else {
+                // Ao carregar um chat antigo, também parseamos a resposta da IA
+                contentDiv.innerHTML = marked.parse(msg.content);
+            }
         });
 
         renderChatHistory();

@@ -173,12 +173,12 @@ body {
     white-space: pre-wrap;
     word-wrap: break-word;
     margin: 1rem 0;
+    overflow-x: auto;
 }
 .message-content code {
     font-family: 'Courier New', Courier, monospace;
 }
 
-/* Animação do cursor piscando */
 .blinking-cursor {
   display: inline-block;
   width: 8px;
