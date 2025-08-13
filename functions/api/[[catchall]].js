@@ -11,78 +11,68 @@ const jsonResponse = (data, status = 200) => new Response(JSON.stringify(data), 
 const router = Router();
 
 // --- MIDDLEWARE DE AUTENTICAÇÃO ---
-// Todas as rotas abaixo desta linha verificarão se o usuário está logado.
-router.all('*', async (request, context) => {
+// Verifica se o usuário está logado em todas as rotas
+const withAuth = async (request, context) => {
     const clerkClient = createClerkClient({ secretKey: context.env.CLERK_SECRET_KEY });
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader) return jsonResponse({ error: 'Não autorizado: Sem cabeçalho de autorização.' }, 401);
+    if (!authHeader) return jsonResponse({ error: 'Não autorizado.' }, 401);
 
     const token = authHeader.replace('Bearer ', '');
     try {
         const claims = await clerkClient.verifyToken(token);
-        if (!claims.sub) return jsonResponse({ error: 'Token inválido' }, 401);
-        // Anexa o ID do usuário ao objeto 'request' para que outras rotas possam usá-lo
-        request.clerkUserId = claims.sub;
+        if (!claims.sub) return jsonResponse({ error: 'Token inválido.' }, 401);
+        request.clerkUserId = claims.sub; // Anexa o ID do usuário ao request
     } catch (err) {
-        return jsonResponse({ error: 'Não autorizado: Token expirado ou inválido.' }, 401);
+        return jsonResponse({ error: `Não autorizado: ${err.message}` }, 401);
     }
-});
+};
 
 // --- ROTAS DA API ---
 
 // GET /api/chats -> Busca o histórico de chats do usuário
-router.get('/api/chats', async (request, context) => {
+router.get('/api/chats', withAuth, async (request, context) => {
     const { clerkUserId } = request;
     const { DB } = context.env;
-    try {
-        const { results } = await DB.prepare("SELECT * FROM Chats WHERE clerkUserId = ? ORDER BY isPinned DESC, createdAt DESC")
-                                  .bind(clerkUserId).all();
-        return jsonResponse(results);
-    } catch (e) {
-        return jsonResponse({ error: 'Falha ao buscar chats', details: e.message }, 500);
-    }
+    const { results } = await DB.prepare("SELECT * FROM Chats WHERE clerkUserId = ? ORDER BY isPinned DESC, createdAt DESC")
+                              .bind(clerkUserId).all();
+    return jsonResponse(results);
 });
-
+    
 // GET /api/chats/:id/messages -> Busca as mensagens de um chat específico
-router.get('/api/chats/:id/messages', async (request, context) => {
+router.get('/api/chats/:id/messages', withAuth, async (request, context) => {
     const { clerkUserId } = request;
     const chatId = request.params.id;
     const { DB } = context.env;
-    try {
-        const { results } = await DB.prepare("SELECT * FROM Messages WHERE chatId = (SELECT id FROM Chats WHERE id = ? AND clerkUserId = ?) ORDER BY createdAt ASC")
-                                  .bind(chatId, clerkUserId).all();
-        return jsonResponse(results);
-    } catch (e) {
-        return jsonResponse({ error: 'Falha ao buscar mensagens', details: e.message }, 500);
-    }
+    
+    const chatCheck = await DB.prepare("SELECT id FROM Chats WHERE id = ? AND clerkUserId = ?").bind(chatId, clerkUserId).first();
+    if (!chatCheck) return jsonResponse({ error: 'Chat não encontrado' }, 404);
+
+    const { results } = await DB.prepare("SELECT * FROM Messages WHERE chatId = ? ORDER BY createdAt ASC")
+                              .bind(chatId).all();
+    return jsonResponse(results);
 });
 
-
-// POST /api/stream -> Rota principal de CHAT
-router.post('/api/stream', async (request, context) => {
+// POST /api/stream -> Rota principal de CHAT, agora salva no banco
+router.post('/api/stream', withAuth, async (request, context) => {
     const { clerkUserId } = request;
     const { DB, DEEPSEEK_API_KEY } = context.env;
-    const requestData = await request.json();
-    const { messages, chatData } = requestData;
+    const { messages, chatData } = await request.json();
 
     let chatId = chatData.id;
 
-    // Se for uma nova conversa, cria o registro no banco primeiro
     if (!chatId) {
-        chatId = `chat_${Date.now()}`;
-        await DB.prepare("INSERT INTO Chats (id, clerkUserId, title, createdAt) VALUES (?, ?, ?, ?)")
-              .bind(chatId, clerkUserId, chatData.title, new Date().toISOString())
+        chatId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await DB.prepare("INSERT INTO Chats (id, clerkUserId, title, createdAt, systemPrompt, temperature, model) VALUES (?, ?, ?, ?, ?, ?, ?)")
+              .bind(chatId, clerkUserId, chatData.title, new Date().toISOString(), chatData.systemPrompt, chatData.temperature, chatData.model)
               .run();
     }
-
-    // Salva a mensagem do usuário no banco
+    
     const userMessage = messages[messages.length - 1];
     const userMessageId = `msg_${Date.now()}`;
     await DB.prepare("INSERT INTO Messages (id, chatId, role, content, createdAt) VALUES (?, ?, ?, ?, ?)")
           .bind(userMessageId, chatId, userMessage.role, userMessage.content, new Date().toISOString())
           .run();
 
-    // Lógica de chamada à API DeepSeek
     const apiURL = "https://api.deepseek.com/chat/completions";
     const payload = { model: chatData.model, messages, temperature: chatData.temperature, stream: true };
 
@@ -92,71 +82,83 @@ router.post('/api/stream', async (request, context) => {
         body: JSON.stringify(payload)
     });
 
-    // Clona o stream para poder ler e enviar ao mesmo tempo.
     const [streamToClient, streamToDB] = apiResponse.body.tee();
-
+    
     const saveFullResponse = async () => {
         const reader = streamToDB.getReader();
         const decoder = new TextDecoder();
         let fullResponse = '';
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const dataStr = line.substring(6);
-                    if (dataStr.trim() !== '[DONE]') {
-                         try {
-                            const parsedData = JSON.parse(dataStr);
-                            if (parsedData.choices && parsedData.choices[0].delta.content) {
-                                fullResponse += parsedData.choices[0].delta.content;
-                            }
-                        } catch (e) {}
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataStr = line.substring(6);
+                        if (dataStr.trim() !== '[DONE]') {
+                            try {
+                                const parsedData = JSON.parse(dataStr);
+                                if (parsedData.choices && parsedData.choices[0].delta.content) {
+                                    fullResponse += parsedData.choices[0].delta.content;
+                                }
+                            } catch (e) {}
+                        }
                     }
                 }
             }
-        }
-        // Salva a resposta completa da IA no banco
-        const aiMessageId = `msg_${Date.now()}_ai`;
-        await DB.prepare("INSERT INTO Messages (id, chatId, role, content, createdAt) VALUES (?, ?, ?, ?, ?)")
-              .bind(aiMessageId, chatId, 'assistant', fullResponse, new Date().toISOString())
-              .run();
+            if(fullResponse) {
+                const aiMessageId = `msg_${Date.now()}_ai`;
+                await DB.prepare("INSERT INTO Messages (id, chatId, role, content, createdAt) VALUES (?, ?, ?, ?, ?)")
+                      .bind(aiMessageId, chatId, 'assistant', fullResponse, new Date().toISOString())
+                      .run();
+            }
+        } catch (e) { console.error('Erro ao salvar resposta no DB:', e); }
     };
 
     context.waitUntil(saveFullResponse());
 
-    // Retorna o ID do chat junto com o stream
     const responseWithChatId = new ReadableStream({
         start(controller) {
             controller.enqueue(`event: chat_id\ndata: ${JSON.stringify({ chatId })}\n\n`);
             const reader = streamToClient.getReader();
             function push() {
                 reader.read().then(({ done, value }) => {
-                    if (done) {
-                        controller.close();
-                        return;
-                    }
+                    if (done) { controller.close(); return; }
                     controller.enqueue(value);
                     push();
-                });
+                }).catch(error => { controller.error(error); });
             }
             push();
         }
     });
-
+    
     return new Response(responseWithChatId, {
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }
+        headers: { 'Content-Type': 'text/event-stream' }
     });
 });
 
-// Rota para deletar um chat
-router.delete('/api/chats/:id', async (request, context) => {
+// PUT /api/chats/:id -> Atualiza um chat (ex: fixar)
+router.put('/api/chats/:id', withAuth, async (request, context) => {
     const { clerkUserId } = request;
     const chatId = request.params.id;
     const { DB } = context.env;
+    const updates = await request.json();
 
+    if (typeof updates.isPinned !== 'undefined') {
+        await DB.prepare("UPDATE Chats SET isPinned = ? WHERE id = ? AND clerkUserId = ?")
+              .bind(updates.isPinned, chatId, clerkUserId)
+              .run();
+    }
+    return jsonResponse({ success: true });
+});
+
+// DELETE /api/chats/:id -> Deleta um chat
+router.delete('/api/chats/:id', withAuth, async (request, context) => {
+    const { clerkUserId } = request;
+    const chatId = request.params.id;
+    const { DB } = context.env;
     await DB.prepare("DELETE FROM Chats WHERE id = ? AND clerkUserId = ?").bind(chatId, clerkUserId).run();
     return jsonResponse({ success: true });
 });
@@ -164,13 +166,11 @@ router.delete('/api/chats/:id', async (request, context) => {
 // Rota de fallback para 404
 router.all('*', () => jsonResponse({ error: 'Rota não encontrada' }, 404));
 
-// Handler principal que executa o roteador
+// Handler principal
 export const onRequest = (context) => {
-    // A rota de pegar a chave do Clerk não precisa de autenticação
     const url = new URL(context.request.url);
     if (url.pathname === '/api/clerk-key') {
         return jsonResponse({ key: context.env.PUBLIC_CLERK_PUBLISHABLE_KEY });
     }
-    // Todas as outras rotas passam pelo roteador com autenticação
     return router.handle(context.request, context);
 };

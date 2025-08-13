@@ -1,138 +1,21 @@
-/* Adicione estas novas regras ao seu CSS */
+/* ... (todo o CSS da versão anterior) ... */
+/* ADICIONE ESTAS REGRAS NO FINAL DO SEU ARQUIVO CSS */
 
-/* --- TEMA CLARO --- */
-body.light-mode {
-    --bg-color-dark: #f0f0f0;
-    --bg-color-light: #ffffff;
-    --sidebar-bg: #e9e9e9;
-    --text-color: #212121;
-    --text-color-light: #555555;
-    --border-color: #d1d1d1;
-}
-
-/* --- MODAL DE CONFIGURAÇÕES --- */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
+.auth-container {
     width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    z-index: 2000;
+    height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-}
-.modal-overlay.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-.modal-content {
-    background: var(--bg-color-dark);
+    text-align: center;
     padding: 2rem;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 500px;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    border: 1px solid var(--border-color);
 }
-.modal-content h2 {
-    color: var(--text-color);
-    margin-bottom: 0;
+
+#clerk-sign-in {
+    margin-top: 2rem;
 }
-.setting-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.setting-item label {
-    color: var(--text-color-light);
-    font-weight: 500;
-}
-.setting-item select, .setting-item textarea, .setting-item input {
+
+.sidebar-footer #clerk-user-button {
     width: 100%;
-    padding: 0.75rem;
-    border-radius: 8px;
-    background-color: var(--bg-color-light);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    font-size: 1rem;
-    font-family: var(--font-family);
-}
-.setting-item textarea { resize: vertical; }
-
-#close-modal-btn {
-    align-self: flex-end;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    background-color: var(--accent-color);
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-/* --- BOTÕES DE AÇÃO NA SIDEBAR --- */
-.sidebar-footer {
-    margin-top: auto;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    gap: 0.5rem;
-}
-.sidebar-action-btn {
-    flex-grow: 1;
-    background: none;
-    border: 1px solid var(--border-color);
-    color: var(--text-color-light);
-    padding: 0.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.sidebar-action-btn:hover {
-    color: var(--text-color);
-    border-color: var(--accent-color);
-}
-
-/* --- BOTÕES NAS MENSAGENS (EDITAR/REGENERAR) --- */
-.message-actions {
-    display: none; /* aparece no hover */
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: flex;
-    gap: 0.5rem;
-}
-.message-wrapper:hover .message-actions {
-    display: flex;
-}
-.message-action-btn {
-    background: var(--bg-color-dark);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    border-radius: 5px;
-    cursor: pointer;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.message-action-btn:hover { background-color: var(--border-color); }
-
-.message-content textarea.edit-input {
-    width: 100%;
-    padding: 0.5rem;
-    border-radius: 4px;
-    background: var(--bg-color-dark);
-    color: var(--text-color);
-    border: 1px solid var(--accent-color);
-    font-family: var(--font-family);
-    font-size: 1rem;
-    resize: vertical;
 }
