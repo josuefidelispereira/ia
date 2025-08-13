@@ -12,8 +12,22 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: thin; scrollbar-color: var(--bg-color-light) var(--sidebar-bg); }
-body { font-family: var(--font-family); background-color: var(--bg-color-dark); color: var(--text-color); height: 100vh; overflow: hidden; }
-.app-layout { display: flex; height: 100vh; position: relative; }
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color-dark);
+    color: var(--text-color);
+    /* **** CORREÇÃO FINAL MOBILE AQUI **** */
+    height: 100dvh; /* Usando dvh em vez de vh */
+    overflow: hidden;
+}
+
+.app-layout {
+    display: flex;
+    /* **** CORREÇÃO FINAL MOBILE AQUI **** */
+    height: 100dvh; /* Usando dvh em vez de vh */
+    position: relative;
+}
 
 /* --- Overlay para Sidebar Mobile --- */
 .sidebar-overlay {
@@ -61,8 +75,6 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
     display: flex;
     flex-direction: column;
     background-color: var(--bg-color-dark);
-    /* **** ADIÇÃO IMPORTANTE AQUI **** */
-    /* Garante que o container principal não estoure a altura da tela */
     overflow: hidden;
 }
 
@@ -72,8 +84,6 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
     flex-grow: 1;
     position: relative;
     overflow-y: auto;
-    /* **** ADIÇÃO IMPORTANTE AQUI **** */
-    /* A correção principal para o bug de layout vertical */
     min-height: 0;
 }
 
@@ -122,8 +132,8 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
         top: 0;
         bottom: 0;
         transform: translateX(-100%);
-        width: 85vw; /* Usa porcentagem da tela */
-        max-width: 280px; /* Mas não passa de 280px */
+        width: 85vw;
+        max-width: 280px; 
     }
     .sidebar.visible {
         transform: translateX(0);
@@ -137,7 +147,7 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
         align-items: center;
         padding: 0.75rem 1rem;
         border-bottom: 1px solid var(--border-color);
-        flex-shrink: 0; /* Garante que o cabeçalho não encolha */
+        flex-shrink: 0;
     }
     .menu-toggle-btn {
         background: none;
