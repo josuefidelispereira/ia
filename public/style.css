@@ -56,9 +56,27 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
 .context-menu-btn.delete:hover { background-color: var(--danger-color); }
 
 /* --- CONTEÚDO PRINCIPAL --- */
-.main-content { flex-grow: 1; display: flex; flex-direction: column; background-color: var(--bg-color-dark); }
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color-dark);
+    /* **** ADIÇÃO IMPORTANTE AQUI **** */
+    /* Garante que o container principal não estoure a altura da tela */
+    overflow: hidden;
+}
+
 .main-header { display: none; }
-.chat-container { flex-grow: 1; position: relative; overflow-y: auto; }
+
+.chat-container {
+    flex-grow: 1;
+    position: relative;
+    overflow-y: auto;
+    /* **** ADIÇÃO IMPORTANTE AQUI **** */
+    /* A correção principal para o bug de layout vertical */
+    min-height: 0;
+}
+
 .welcome-view { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 1rem; }
 .welcome-view h1 { font-size: 2rem; color: var(--text-color-light); }
 .chat-window { padding: 1rem 2rem; max-width: 800px; margin: 0 auto; width: 100%; }
@@ -92,19 +110,51 @@ body { font-family: var(--font-family); background-color: var(--bg-color-dark); 
 #send-button { background-color: var(--accent-color); border: none; color: white; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s, transform 0.2s; flex-shrink: 0; }
 #send-button:hover { background-color: #4a54c4; }
 #send-button:disabled { background-color: var(--border-color); cursor: not-allowed; }
-/* Estilo do botão STOP */
 #send-button.stop-button { background-color: var(--danger-color); }
 #send-button.stop-button:hover { background-color: #c82333; }
 .footer-note { text-align: center; font-size: 0.75rem; color: var(--text-color-light); padding-top: 0.5rem; }
 
 /* --- RESPONSIVIDADE --- */
 @media (max-width: 768px) {
-    .sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); }
-    .sidebar.visible { transform: translateX(0); box-shadow: 5px 0 15px rgba(0,0,0,0.2); }
-    .main-content { width: 100%; }
-    .main-header { display: flex; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
-    .menu-toggle-btn { background: none; border: none; color: var(--text-color); cursor: pointer; padding: 0.5rem; }
-    .mobile-title { font-size: 1.1rem; margin-left: 1rem; }
-    .chat-window, .chat-input-area { padding: 1rem; max-width: 100%; }
-    .action-buttons { opacity: 0.8; }
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        transform: translateX(-100%);
+        width: 85vw; /* Usa porcentagem da tela */
+        max-width: 280px; /* Mas não passa de 280px */
+    }
+    .sidebar.visible {
+        transform: translateX(0);
+        box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+    }
+    .main-content {
+        width: 100%;
+    }
+    .main-header {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0; /* Garante que o cabeçalho não encolha */
+    }
+    .menu-toggle-btn {
+        background: none;
+        border: none;
+        color: var(--text-color);
+        cursor: pointer;
+        padding: 0.5rem;
+    }
+    .mobile-title {
+        font-size: 1.1rem;
+        margin-left: 1rem;
+    }
+    .chat-window, .chat-input-area {
+        padding: 1rem;
+        max-width: 100%;
+    }
+    .action-buttons {
+        opacity: 0.8;
+    }
 }
