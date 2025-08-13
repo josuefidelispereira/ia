@@ -1,10 +1,13 @@
 // public/script.js
 document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMENTOS DO DOM ---
+    const sidebar = document.getElementById('sidebar');
+    const menuToggleBtn = document.getElementById('menu-toggle-btn');
     const newChatBtn = document.getElementById('new-chat-btn');
     const searchInput = document.getElementById('search-input');
     const chatHistory = document.getElementById('chat-history');
     const welcomeView = document.getElementById('welcome-view');
+    const chatContainer = document.getElementById('chat-container');
     const chatWindow = document.getElementById('chat-window');
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
@@ -12,12 +15,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- ESTADO DA APLICAÇÃO ---
     let currentChatId = null;
-    let conversations = {}; // Armazena todas as conversas: { "id": { title: "...", messages: [] } }
+    let conversations = {};
 
-    // --- FUNÇÕES DE CHAT E MENSAGENS ---
+    // --- FUNÇÕES DE LÓGICA ---
+    
+    // Função para rolar o chat para o final
+    const scrollToBottom = () => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
 
-    // Adiciona um container de mensagem (usuário ou IA) à janela de chat
-    const addMessageToUI = (role, content) => {
+    // Cria os botões de ação para as mensagens da IA
+    const createActionButtons = (messageContentDiv, getFullText) => {
+        const actionsWrapper = document.createElement('div');
+        actionsWrapper.className = 'action-buttons';
+
+        // Botão de Copiar
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'action-btn';
+        copyBtn.title = 'Copiar';
+        copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(getFullText()).then(() => {
+                copyBtn.innerHTML = `✓`;
+                setTimeout(() => {
+                    copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+                }, 1500);
+            });
+        };
+
+        // Botão de Download
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'action-btn';
+        downloadBtn.title = 'Download';
+        downloadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+        downloadBtn.onclick = () => {
+            const textToDownload = getFullText();
+            const blob = new Blob([textToDownload], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resposta-ia-${Date.now()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        actionsWrapper.appendChild(copyBtn);
+        actionsWrapper.appendChild(downloadBtn);
+        messageContentDiv.parentElement.appendChild(actionsWrapper);
+    };
+
+    // Adiciona uma mensagem (usuário ou IA) à janela de chat
+    const addMessageToUI = (role, content = '') => {
         const wrapper = document.createElement('div');
         wrapper.classList.add('message-wrapper', role);
 
@@ -28,21 +78,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
         
-        // Mensagem do usuário não precisa de parsing de markdown
         if (role === 'user') {
             contentDiv.textContent = content;
+        } else {
+            // Se for IA, apenas preparamos o container. O conteúdo virá via streaming.
+            contentDiv.innerHTML = content; // Para carregar histórico com HTML já formatado
         }
         
         wrapper.appendChild(roleDiv);
         wrapper.appendChild(contentDiv);
         chatWindow.appendChild(wrapper);
 
-        // Esconde a tela de boas-vindas
         welcomeView.style.display = 'none';
         chatWindow.style.display = 'block';
 
-        chatWindow.scrollTop = chatWindow.scrollHeight;
-        return contentDiv; // Retorna o elemento de conteúdo para streaming
+        scrollToBottom();
+        return contentDiv;
     };
 
     // Lida com o envio do formulário
@@ -51,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const userMessage = messageInput.value.trim();
         if (!userMessage) return;
 
-        // Se é uma nova conversa, cria um ID e título
         if (!currentChatId) {
             currentChatId = `chat_${Date.now()}`;
             conversations[currentChatId] = {
@@ -60,16 +110,14 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        // Adiciona a mensagem do usuário ao estado e à UI
         conversations[currentChatId].messages.push({ role: 'user', content: userMessage });
         addMessageToUI('user', userMessage);
         
         messageInput.value = '';
-        messageInput.style.height = 'auto'; // Reseta a altura do textarea
+        messageInput.style.height = 'auto';
         sendButton.disabled = true;
 
-        // Cria o container para a resposta da IA e o cursor piscando
-        const aiMessageContent = addMessageToUI('ia', '');
+        const aiMessageContent = addMessageToUI('ia');
         const cursor = document.createElement('span');
         cursor.classList.add('blinking-cursor');
         aiMessageContent.appendChild(cursor);
@@ -96,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (done) break;
 
                 const chunk = decoder.decode(value, { stream: true });
-                // Processa os eventos Server-Sent
                 const lines = chunk.split('\n\n');
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -108,23 +155,20 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const textChunk = parsedData.choices[0].delta.content;
                                 aiResponseText += textChunk;
                                 
-                                // Traduz o markdown para HTML e insere na página
                                 aiMessageContent.innerHTML = marked.parse(aiResponseText);
                                 aiMessageContent.appendChild(cursor);
+                                scrollToBottom(); // ROLA A PÁGINA A CADA PEDAÇO
                             }
-                        } catch (e) {
-                            // Ignora erros de parsing de JSON em chunks incompletos
-                        }
+                        } catch (e) {}
                     }
                 }
             }
             
-            // Finaliza a resposta
-            cursor.remove(); // Remove o cursor
-            // Garante que o conteúdo final seja parseado
+            cursor.remove();
             aiMessageContent.innerHTML = marked.parse(aiResponseText); 
             
             conversations[currentChatId].messages.push({ role: 'assistant', content: aiResponseText });
+            createActionButtons(aiMessageContent, () => aiResponseText);
             saveConversations();
             renderChatHistory();
 
@@ -144,49 +188,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- FUNÇÕES DE HISTÓRICO E LOCAL STORAGE ---
-
-    // Salva todas as conversas no Local Storage
-    const saveConversations = () => {
-        localStorage.setItem('chatConversations', JSON.stringify(conversations));
-    };
-
-    // Carrega as conversas do Local Storage
+    const saveConversations = () => localStorage.setItem('chatConversations', JSON.stringify(conversations));
     const loadConversations = () => {
         const saved = localStorage.getItem('chatConversations');
-        if (saved) {
-            conversations = JSON.parse(saved);
-        }
+        if (saved) conversations = JSON.parse(saved);
     };
     
-    // Renderiza a barra lateral com o histórico
     const renderChatHistory = (filter = '') => {
         chatHistory.innerHTML = '';
         Object.keys(conversations)
-            .reverse() // Mostra os mais recentes primeiro
+            .reverse()
             .filter(id => conversations[id].title.toLowerCase().includes(filter.toLowerCase()))
             .forEach(id => {
                 const item = document.createElement('div');
                 item.classList.add('history-item');
                 item.textContent = conversations[id].title;
                 item.dataset.chatId = id;
-                if (id === currentChatId) {
-                    item.classList.add('active');
-                }
+                if (id === currentChatId) item.classList.add('active');
                 chatHistory.appendChild(item);
             });
     };
     
-    // Inicia uma nova conversa
     const startNewChat = () => {
         currentChatId = null;
         chatWindow.innerHTML = '';
         welcomeView.style.display = 'flex';
         chatWindow.style.display = 'none';
         messageInput.value = '';
-        renderChatHistory(); // Para remover a seleção 'active'
+        renderChatHistory();
+        sidebar.classList.remove('visible'); // Esconde sidebar no mobile
     };
     
-    // Carrega uma conversa do histórico
     const loadChat = (chatId) => {
         if (!conversations[chatId]) return;
         currentChatId = chatId;
@@ -196,16 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
         chatWindow.style.display = 'block';
 
         conversations[chatId].messages.forEach(msg => {
-            const contentDiv = addMessageToUI(msg.role, '');
-             if (msg.role === 'user') {
-                contentDiv.textContent = msg.content;
-            } else {
-                // Ao carregar um chat antigo, também parseamos a resposta da IA
-                contentDiv.innerHTML = marked.parse(msg.content);
+            const contentDiv = addMessageToUI(msg.role, msg.content);
+            if (msg.role === 'ia') {
+                createActionButtons(contentDiv, () => msg.content);
             }
         });
 
         renderChatHistory();
+        sidebar.classList.remove('visible'); // Esconde sidebar no mobile
     };
 
     // --- EVENT LISTENERS ---
@@ -219,22 +249,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     newChatBtn.addEventListener('click', startNewChat);
-    
-    searchInput.addEventListener('input', (e) => {
-        renderChatHistory(e.target.value);
-    });
-
+    searchInput.addEventListener('input', (e) => renderChatHistory(e.target.value));
     chatHistory.addEventListener('click', (e) => {
         if (e.target && e.target.classList.contains('history-item')) {
             loadChat(e.target.dataset.chatId);
         }
     });
+    // Lógica para o menu mobile
+    menuToggleBtn.addEventListener('click', () => sidebar.classList.toggle('visible'));
 
     // --- INICIALIZAÇÃO ---
     const initializeApp = () => {
         loadConversations();
         renderChatHistory();
-        startNewChat(); // Começa sempre com a tela de boas-vindas
+        startNewChat();
     };
 
     initializeApp();
