@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- ELEMENTOS DO DOM ---
     const sidebar = document.getElementById('sidebar');
     const menuToggleBtn = document.getElementById('menu-toggle-btn');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
     const newChatBtn = document.getElementById('new-chat-btn');
     const searchInput = document.getElementById('search-input');
     const chatHistory = document.getElementById('chat-history');
@@ -12,60 +13,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
-    const recordAudioBtn = document.getElementById('record-audio-btn');
     const fileInput = document.getElementById('file-input');
     const attachmentPreview = document.getElementById('attachment-preview');
 
     // --- ESTADO DA APLICAÇÃO ---
     let currentChatId = null;
     let conversations = {};
-    let isRecording = false;
-    let speechRecognition = null;
     let stagedAttachment = null;
+    let currentAbortController = null; // Para a função de parar a geração
 
-    // --- LÓGICA DE ÁUDIO (SPEECH-TO-TEXT) ---
-    const setupSpeechRecognition = () => {
-        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognitionAPI) {
-            speechRecognition = new SpeechRecognitionAPI();
-            speechRecognition.continuous = true;
-            speechRecognition.lang = 'pt-BR';
-            speechRecognition.interimResults = true;
-            speechRecognition.onresult = (event) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    finalTranscript += event.results[i][0].transcript;
-                }
-                messageInput.value = finalTranscript;
-                handleInput();
-            };
-            speechRecognition.onend = () => {
-                isRecording = false;
-                recordAudioBtn.classList.remove('recording');
-            };
-        } else {
-            recordAudioBtn.style.display = 'none'; // Esconde o botão se a API não for suportada
-        }
-    };
-
-    const toggleRecording = () => {
-        if (isRecording) {
-            speechRecognition.stop();
-        } else {
-            if (!speechRecognition) return;
-            try {
-                speechRecognition.start();
-                isRecording = true;
-                recordAudioBtn.classList.add('recording');
-            } catch (e) {
-                console.error("Erro ao iniciar gravação:", e);
-                isRecording = false;
-                recordAudioBtn.classList.remove('recording');
-            }
-        }
-    };
-
-    // --- LÓGICA DE ANEXOS ---
+    // --- LÓGICA DE ANEXOS (VISUAL) ---
     const handleFileSelect = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -77,14 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             reader.readAsDataURL(file);
         } else {
-            alert('Funcionalidade completa para outros tipos de arquivo não implementada. Apenas imagens podem ser pré-visualizadas.');
+            alert('Apenas imagens podem ser pré-visualizadas no momento.');
         }
-        fileInput.value = '';
+        fileInput.value = ''; // Permite selecionar o mesmo arquivo novamente
     };
 
     const renderAttachmentPreview = () => {
         attachmentPreview.innerHTML = '';
-        attachmentPreview.style.display = 'none';
         if (stagedAttachment?.type === 'image') {
             attachmentPreview.style.display = 'flex';
             const previewItem = document.createElement('div');
@@ -101,6 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
             previewItem.appendChild(img);
             previewItem.appendChild(removeBtn);
             attachmentPreview.appendChild(previewItem);
+        } else {
+            attachmentPreview.style.display = 'none';
         }
     };
 
@@ -110,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createActionButtons = (getFullText) => {
         const actionsWrapper = document.createElement('div');
         actionsWrapper.className = 'action-buttons';
+
         const copyBtn = document.createElement('button');
         copyBtn.className = 'action-btn';
         copyBtn.title = 'Copiar';
@@ -122,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 1500);
             });
         };
+
         const downloadBtn = document.createElement('button');
         downloadBtn.className = 'action-btn';
         downloadBtn.title = 'Download';
@@ -150,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         roleDiv.textContent = role === 'user' ? 'Você' : 'Assistente IA';
         const contentDiv = document.createElement('div');
         contentDiv.classList.add('message-content');
+
         if (role === 'user') {
             contentDiv.textContent = content;
             if (attachment?.type === 'image') {
@@ -162,8 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             contentDiv.innerHTML = marked.parse(content || '');
-            const buttons = createActionButtons(() => content);
-            wrapper.appendChild(buttons);
+            if (content) { // Só adiciona botões se houver conteúdo (não para o container vazio inicial)
+                const buttons = createActionButtons(() => content);
+                wrapper.appendChild(buttons);
+            }
         }
         wrapper.appendChild(roleDiv);
         wrapper.appendChild(contentDiv);
@@ -176,8 +139,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleFormSubmit = async (event) => {
         event.preventDefault();
+        
+        if (sendButton.classList.contains('stop-button')) {
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+            return;
+        }
+
         const userMessage = messageInput.value.trim();
         if (!userMessage && !stagedAttachment) return;
+
         if (!currentChatId) {
             currentChatId = `chat_${Date.now()}`;
             conversations[currentChatId] = {
@@ -186,33 +158,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 isPinned: false
             };
         }
+
         const messagePayload = { role: 'user', content: userMessage, attachment: stagedAttachment };
         conversations[currentChatId].messages.push(messagePayload);
         addMessageToUI(messagePayload);
         scrollToBottom();
+
         stagedAttachment = null;
         renderAttachmentPreview();
         messageInput.value = '';
         messageInput.style.height = 'auto';
-        sendButton.disabled = true;
+
         const aiMessageContent = addMessageToUI({ role: 'ia' });
         const cursor = document.createElement('span');
         cursor.classList.add('blinking-cursor');
         aiMessageContent.appendChild(cursor);
+
+        currentAbortController = new AbortController();
+        setSendButtonState(true);
+
         try {
             const messagesForApi = conversations[currentChatId].messages.map(m => ({ role: m.role, content: m.content }));
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: messagesForApi })
+                body: JSON.stringify({ messages: messagesForApi }),
+                signal: currentAbortController.signal
             });
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || `Erro HTTP: ${response.status}`);
             }
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let aiResponseText = '';
+
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
@@ -242,26 +224,43 @@ document.addEventListener('DOMContentLoaded', () => {
             saveConversations();
             renderChatHistory();
         } catch (error) {
-            aiMessageContent.textContent = `Desculpe, ocorreu um erro: ${error.message}`;
+            if (error.name === 'AbortError') {
+                aiMessageContent.innerHTML = marked.parse(aiMessageContent.textContent.replace('▋', '')); // Remove cursor
+                aiMessageContent.innerHTML += "<br><small><i>Geração interrompida.</i></small>";
+            } else {
+                console.error('Erro no streaming:', error);
+                aiMessageContent.textContent = `Desculpe, ocorreu um erro: ${error.message}`;
+            }
             cursor.remove();
         } finally {
-            sendButton.disabled = false;
+            setSendButtonState(false);
+            currentAbortController = null;
         }
     };
 
-    // --- LÓGICA DE HISTÓRICO ---
+    const setSendButtonState = (isStopping) => {
+        if (isStopping) {
+            sendButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"></rect></svg>`;
+            sendButton.title = "Parar geração";
+            sendButton.classList.add('stop-button');
+        } else {
+            sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+            sendButton.title = "Enviar Mensagem";
+            sendButton.classList.remove('stop-button');
+        }
+    };
+
+    // --- FUNÇÕES DE HISTÓRICO ---
     const saveConversations = () => localStorage.setItem('chatConversations', JSON.stringify(conversations));
     const loadConversations = () => {
         const saved = localStorage.getItem('chatConversations');
         if (saved) conversations = JSON.parse(saved);
     };
-    
+
     const renderChatHistory = (filter = '') => {
         chatHistory.innerHTML = '';
         const chatIds = Object.keys(conversations);
-        const pinnedChats = chatIds.filter(id => conversations[id].isPinned && conversations[id].title.toLowerCase().includes(filter.toLowerCase()));
-        const unpinnedChats = chatIds.filter(id => !conversations[id].isPinned && conversations[id].title.toLowerCase().includes(filter.toLowerCase()));
-        const createHistoryItem = (id) => {
+        const createItem = (id) => {
             const wrapper = document.createElement('div');
             wrapper.className = 'history-item-wrapper';
             const itemBtn = document.createElement('button');
@@ -284,8 +283,11 @@ document.addEventListener('DOMContentLoaded', () => {
             wrapper.appendChild(optionsBtn);
             chatHistory.appendChild(wrapper);
         };
-        pinnedChats.sort((a, b) => b.localeCompare(a)).forEach(createHistoryItem);
-        unpinnedChats.sort((a, b) => b.localeCompare(a)).forEach(createHistoryItem);
+        const filteredIds = chatIds.filter(id => conversations[id].title.toLowerCase().includes(filter.toLowerCase()));
+        const pinnedChats = filteredIds.filter(id => conversations[id].isPinned).sort((a,b) => b.localeCompare(a));
+        const unpinnedChats = filteredIds.filter(id => !conversations[id].isPinned).sort((a,b) => b.localeCompare(a));
+        pinnedChats.forEach(createItem);
+        unpinnedChats.forEach(createItem);
     };
 
     const toggleContextMenu = (chatId, target) => {
@@ -296,19 +298,21 @@ document.addEventListener('DOMContentLoaded', () => {
         menu.innerHTML = `<button class="context-menu-btn" data-action="pin" data-id="${chatId}">${pinText}</button><button class="context-menu-btn delete" data-action="delete" data-id="${chatId}">Excluir</button>`;
         target.parentElement.appendChild(menu);
         const closeMenu = (e) => {
-            if (!menu.contains(e.target)) menu.remove();
-            document.removeEventListener('click', closeMenu);
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
         };
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
     };
-
+    
     const handleHistoryActions = (e) => {
-        if (e.target.matches('.context-menu-btn')) {
-            const action = e.target.dataset.action;
-            const id = e.target.dataset.id;
+        const button = e.target.closest('.context-menu-btn');
+        if (button) {
+            const action = button.dataset.action;
+            const id = button.dataset.id;
             if (action === 'pin') pinChat(id);
             if (action === 'delete') deleteChat(id);
-            document.querySelector('.history-context-menu')?.remove();
         }
     };
     
@@ -327,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderChatHistory();
     };
     
-    const startNewChat = () => { currentChatId = null; chatWindow.innerHTML = ''; welcomeView.style.display = 'flex'; chatWindow.style.display = 'none'; messageInput.value = ''; stagedAttachment = null; renderAttachmentPreview(); renderChatHistory(); sidebar.classList.remove('visible'); };
+    const startNewChat = () => { currentChatId = null; chatWindow.innerHTML = ''; welcomeView.style.display = 'flex'; chatWindow.style.display = 'none'; messageInput.value = ''; stagedAttachment = null; renderAttachmentPreview(); renderChatHistory(); closeSidebarMobile(); };
     
     const loadChat = (chatId) => {
         if (!conversations[chatId]) return;
@@ -337,23 +341,25 @@ document.addEventListener('DOMContentLoaded', () => {
         chatWindow.style.display = 'block';
         conversations[chatId].messages.forEach(addMessageToUI);
         renderChatHistory();
-        sidebar.classList.remove('visible');
+        closeSidebarMobile();
     };
 
-    const handleInput = () => { messageInput.style.height = 'auto'; messageInput.style.height = (messageInput.scrollHeight) + 'px'; };
+    const handleInput = () => { messageInput.style.height = 'auto'; messageInput.style.height = `${messageInput.scrollHeight}px`; };
+    const closeSidebarMobile = () => { sidebar.classList.remove('visible'); sidebarOverlay.classList.remove('visible'); };
 
     // --- EVENT LISTENERS ---
     messageForm.addEventListener('submit', handleFormSubmit);
+    sendButton.addEventListener('click', (e) => { if (sendButton.classList.contains('stop-button')) handleFormSubmit(e); });
     messageInput.addEventListener('input', handleInput);
     messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); messageForm.requestSubmit(); } });
-    recordAudioBtn.addEventListener('click', toggleRecording);
     fileInput.addEventListener('change', handleFileSelect);
     newChatBtn.addEventListener('click', startNewChat);
     searchInput.addEventListener('input', (e) => renderChatHistory(e.target.value));
     chatHistory.addEventListener('click', handleHistoryActions);
-    menuToggleBtn.addEventListener('click', () => sidebar.classList.toggle('visible'));
+    menuToggleBtn.addEventListener('click', () => { sidebar.classList.toggle('visible'); sidebarOverlay.classList.toggle('visible'); });
+    sidebarOverlay.addEventListener('click', closeSidebarMobile);
 
     // --- INICIALIZAÇÃO ---
-    const initializeApp = () => { loadConversations(); renderChatHistory(); setupSpeechRecognition(); startNewChat(); };
+    const initializeApp = () => { loadConversations(); renderChatHistory(); startNewChat(); };
     initializeApp();
 });
